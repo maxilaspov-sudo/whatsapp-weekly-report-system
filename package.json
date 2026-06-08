@@ -7,7 +7,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "demo:weekly-report": "ts-node src/demo/runWeeklyReportDemo.ts",
-    "whatsapp:listen": "ts-node src/whatsapp/runWhatsappListener.ts"
+    "whatsapp:listen": "ts-node src/whatsapp/runWhatsappListener.ts",
+    "report:weekly": "ts-node src/scheduler/runWeeklyReport.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
