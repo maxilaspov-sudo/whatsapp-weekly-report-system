@@ -1,6 +1,14 @@
 import "dotenv/config";
 import WAWebJS from "whatsapp-web.js";
 import { createWhatsAppClient } from "./whatsappClient";
+import { createSupabaseClient } from "../db/supabaseClient";
+import { SupabaseClosedJobRepository } from "../db/supabaseClosedJobRepository";
+import { ClosedJobRepository } from "../db/closedJobRepository";
+import {
+  processIncomingMessages,
+  IncomingMessage,
+  ProcessResult,
+} from "../pipeline/weeklyReportPipeline";
 
 const TARGET_GROUP_ID = process.env.TARGET_WHATSAPP_GROUP_ID?.trim() ?? "";
 const TARGET_GROUP_NAME = process.env.TARGET_WHATSAPP_GROUP_NAME?.trim() ?? "";
@@ -16,7 +24,25 @@ function matchesTargetGroup(chatId: string, chatName: string): boolean {
   return true;
 }
 
-async function handleMessage(message: WAWebJS.Message): Promise<void> {
+function logProcessResult(result: ProcessResult, sourceMessageId: string): void {
+  if (result.saved_count > 0) {
+    console.log(`[Pipeline] Saved        | ID: ${sourceMessageId}`);
+    return;
+  }
+
+  for (const dup of result.duplicate_messages) {
+    console.log(`[Pipeline] Duplicate    | ID: ${dup.source_message_id}`);
+  }
+
+  for (const inv of result.invalid_messages) {
+    console.warn(`[Pipeline] Invalid      | ID: ${inv.source_message_id} | Reason: ${inv.reason}`);
+  }
+}
+
+async function handleMessage(
+  message: WAWebJS.Message,
+  repository: ClosedJobRepository
+): Promise<void> {
   const body = message.body.trim();
   if (!body) return;
 
@@ -24,34 +50,39 @@ async function handleMessage(message: WAWebJS.Message): Promise<void> {
   if (!chat.isGroup) return;
   if (!matchesTargetGroup(chat.id._serialized, chat.name)) return;
 
-  const sender = message.author ?? message.from;
+  const incoming: IncomingMessage = {
+    source_message_id: message.id._serialized,
+    raw_message: body,
+  };
 
-  console.log("─".repeat(50));
-  console.log(`source_message_id : ${message.id._serialized}`);
-  console.log(`chat_id           : ${chat.id._serialized}`);
-  console.log(`chat_name         : ${chat.name}`);
-  console.log(`sender            : ${sender}`);
-  console.log(`body              :\n${body}`);
+  const result = await processIncomingMessages([incoming], repository);
+
+  logProcessResult(result, incoming.source_message_id);
 }
 
 async function main(): Promise<void> {
   console.log("[WhatsApp] Starting listener...");
 
   if (TARGET_GROUP_ID) {
-    console.log(`[WhatsApp] Filtering by group ID : ${TARGET_GROUP_ID}`);
+    console.log(`[WhatsApp] Filtering by group ID   : ${TARGET_GROUP_ID}`);
   } else if (TARGET_GROUP_NAME) {
-    console.log(`[WhatsApp] Filtering by group name: "${TARGET_GROUP_NAME}"`);
+    console.log(`[WhatsApp] Filtering by group name : "${TARGET_GROUP_NAME}"`);
   } else {
-    console.log("[WhatsApp] No group filter set — logging all group messages.");
+    console.log("[WhatsApp] No group filter set — accepting all group messages.");
   }
+
+  const supabaseClient = createSupabaseClient();
+  const repository = new SupabaseClosedJobRepository(supabaseClient);
+
+  console.log("[WhatsApp] Supabase repository initialized.");
 
   const client = createWhatsAppClient();
 
   client.on("message", async (message: WAWebJS.Message) => {
     try {
-      await handleMessage(message);
+      await handleMessage(message, repository);
     } catch (err) {
-      console.error("[WhatsApp] Error handling message:", err);
+      console.error("[Pipeline] Error processing message:", err);
     }
   });
 
