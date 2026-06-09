@@ -1,5 +1,29 @@
 # Security
 
+## Isolation and Access Control Rules
+
+These rules are enforced in code and tested. Violations are not acceptable even for MVP.
+
+| # | Rule | Status |
+|---|---|---|
+| 1 | Company isolation — reports never cross group boundaries | Enforced via `findByDateRangeForGroup` |
+| 2 | Registered groups only — unregistered groups are silently ignored | Enforced via `lookupGroup` |
+| 3 | Technician names are not globally unique — scoped by group | Enforced via group-scoped queries |
+| 4 | Duplicate messages — same message never counted twice | Enforced via UNIQUE constraint on `source_message_id` |
+| 5 | Private messages — sensitive commands only work in registered groups | Enforced via `chat.isGroup` check |
+| 6 | Per-group start/stop — stopping Group A does not affect Group B | Enforced via `Map<groupId, CommandHandler>` |
+| 7 | Admin permissions — `.start`, `.stop`, `.status`, `.report` require admin | Enforced via `checkCommandAccess()` |
+| 8 | Access control — `whatsapp_group_id → company_id → authorized_admin_ids` | Enforced via `GROUP_REGISTRY` + `GROUP_ADMINS` |
+| 9 | Unauthorized users — reply "Access denied..." and do not execute | Enforced in listener |
+| 10 | Unregistered groups — reply "Group is not registered..." and do not execute | Enforced in listener |
+| 11 | Group name changes — identity always based on `whatsapp_group_id`, never group name | Enforced by design |
+| 12 | PII-safe logging — customer name/phone/address/raw message never logged | Enforced in `logProcessResult()` |
+| 13 | Service role key — never logged, committed, or exposed | Enforced by `.gitignore` + code review |
+| 14 | WhatsApp session — `.wwebjs_auth/` never committed | Enforced by `.gitignore` |
+| 15 | Timezone — single deployment timezone (future: per-company) | Documented only |
+
+---
+
 ## Critical Rules (non-negotiable)
 
 1. **Never commit `.env`** — contains all credentials. It is in `.gitignore`
@@ -33,11 +57,13 @@ Required environment variables:
 |---|---|---|
 | `SUPABASE_URL` | Low | Project URL, not a secret, but keep out of public repos |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Critical** | Never expose outside server process |
-| `TARGET_WHATSAPP_GROUP_ID` | Medium | Group identity; do not log in production |
-| `TARGET_WHATSAPP_GROUP_NAME` | Medium | Same |
+| `GROUP_REGISTRY` | Low | Group/company identifiers — not customer data |
+| `GROUP_ADMINS` | Medium | Admin phone numbers — keep private |
+| `TARGET_WHATSAPP_GROUP_ID` | Low | Group ID used by cron/CLI only |
 | `COMPANY_NAME` | Low | Display only |
 | `WHATSAPP_PHONE_NUMBER` | Medium | Connected account number |
-| `REPORT_RECIPIENTS` | Medium | Phone numbers of report recipients |
+| `MANAGER_REPORT_RECIPIENT` | Medium | Phone number or label of report recipient |
+| `DEFAULT_TECHNICIAN_RECIPIENT` | Medium | Phone number or label |
 
 ---
 

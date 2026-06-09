@@ -2,20 +2,21 @@
 
 ## Overview
 
-A Node.js/TypeScript backend service that receives WhatsApp messages from a
-technician group, parses closed-job reports, persists them to a database, and
-generates weekly financial reports. There is no frontend.
+A Node.js/TypeScript backend service that receives WhatsApp messages from one or
+more technician groups, parses closed-job reports, persists them to a database,
+and generates weekly financial reports. There is no frontend.
 
-The system is a **one-company-per-deployment template**. Each deployment has its
-own WhatsApp session, database, and environment configuration. No data or state
-is shared between deployments.
+The system is a **cloneable template** — each client company gets their own
+deployment. A single bot number may serve multiple WhatsApp groups (one per
+company), with full isolation between them. No data or state is shared across
+groups or deployments.
 
 ---
 
 ## Data Flow
 
 ```
-WhatsApp group (inbound messages)
+WhatsApp group(s) (inbound messages)
         │
         ▼
   whatsapp-web.js client
@@ -24,13 +25,15 @@ WhatsApp group (inbound messages)
         ▼
   WhatsApp listener
   [src/whatsapp/runWhatsappListener.ts]
-        │  filters by group ID or group name (env vars)
-        │  extracts: { source_message_id, raw_message }
+        │  1. rejects private messages (chat.isGroup guard)
+        │  2. looks up group in GROUP_REGISTRY via lookupGroup()
+        │  3. if command: checks admin via checkCommandAccess()
+        │  4. if job message + active: forwards to pipeline
         ▼
   Pipeline: processIncomingMessages()
   [src/pipeline/weeklyReportPipeline.ts]
         │  parses each message via fullJobMessageParser
-        │  saves valid records via ClosedJobRepository
+        │  saves valid records (with company_id + whatsapp_group_id)
         │  returns: ProcessResult { saved, invalid, duplicate }
         ▼
   ClosedJobRepository (interface)
@@ -41,12 +44,13 @@ WhatsApp group (inbound messages)
                 │
                 ▼
           Supabase / PostgreSQL
-          [closed_jobs table]
+          [closed_jobs table — every row scoped by whatsapp_group_id]
                 │
                 ▼
   Pipeline: generateFormattedWeeklyReports()
   [src/pipeline/weeklyReportPipeline.ts]
-        │  findByDateRange() → generateWeeklyReport() → formatters
+        │  findByDateRangeForGroup(start, end, whatsapp_group_id)
+        │  → generateWeeklyReport() → formatters
         ▼
   Formatted report text strings
   (manager report + one per technician)
@@ -58,12 +62,17 @@ WhatsApp group (inbound messages)
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| **Ingestion** | `whatsapp/` | Connect to WhatsApp Web, filter to target group, forward raw messages |
+| **Ingestion** | `whatsapp/` | Connect to WhatsApp Web, enforce access control, forward messages |
+| **Config** | `config/groupRegistry.ts` | Parse `GROUP_REGISTRY` + `GROUP_ADMINS`; return `GroupConfig` |
+| **Access control** | `commands/accessControl.ts` | Classify commands as admin/public; decide grant/deny |
+| **Commands** | `commands/` | Parse command syntax; execute command logic per group |
 | **Parsing** | `parser/` | Convert raw message strings to typed data structures; no I/O |
 | **Persistence** | `db/` | Abstract storage behind a repository interface; two implementations |
 | **Domain logic** | `reports/` | Aggregate jobs into weekly reports; format output text |
 | **Pipeline** | `pipeline/` | Orchestrate parse → save and load → report; no transport knowledge |
-| **Entry points** | `whatsapp/runWhatsappListener.ts`, `demo/` | Wire layers together; load env; initialize clients |
+| **Scheduler** | `scheduler/` | Weekly report cron, date-range helpers |
+| **Sender** | `sender/` | Deliver formatted report text (console or WhatsApp) |
+| **Entry points** | `runWhatsappListener.ts`, `runWeeklyReport.ts`, `weeklyCron.ts`, `demo/` | Wire layers; load env; initialize clients |
 
 ---
 
@@ -132,6 +141,7 @@ there as message formats vary across deployments.
 ClosedJobRepository (interface)
   save(job: NewClosedJob): Promise<SaveResult>
   findByDateRange(start, end): Promise<ClosedJobRecord[]>
+  findByDateRangeForGroup(start, end, whatsapp_group_id): Promise<ClosedJobRecord[]>
   findBySourceMessageId(id): Promise<ClosedJobRecord | null>
   listAll(): Promise<ClosedJobRecord[]>
 
@@ -141,6 +151,10 @@ Implementations:
                                  as SaveResult rather than throwing
 ```
 
+`findByDateRangeForGroup` is the only method used by report generation — it
+filters by both date range and `whatsapp_group_id`, making cross-group
+contamination structurally impossible.
+
 Duplicate prevention is enforced at two levels:
 1. The database has a `UNIQUE` constraint on `source_message_id`.
 2. `SupabaseClosedJobRepository.save()` catches error code `23505` and returns
@@ -149,6 +163,27 @@ Duplicate prevention is enforced at two levels:
 
 ---
 
+## Multi-Group Isolation
+
+A single deployment can serve multiple WhatsApp groups. Each group is registered
+in `GROUP_REGISTRY` (maps group ID → company ID). Every `ClosedJobRecord` stores
+both `company_id` and `whatsapp_group_id`. All report queries use
+`findByDateRangeForGroup` so a report for Group A never includes jobs from Group B.
+
+The listener maintains one `CommandHandler` per group in a `Map<groupId, CommandHandler>`.
+Each handler carries its own independent active/inactive state.
+
+## Multi-Group Access Control
+
+Admin commands (`.start`, `.stop`, `.status`, `.report`) require the sender to
+be listed in `GROUP_ADMINS` for that group. The pure function `checkCommandAccess()`
+in `src/commands/accessControl.ts` encodes this decision and is fully unit-tested.
+
+Public commands (`.help`, `.format`) are available to any user in a registered group.
+
+Unregistered groups and private messages are always rejected before any command
+executes.
+
 ## One-Company-Per-Deployment Model
 
 Each deployment is an isolated process with its own:
@@ -156,7 +191,7 @@ Each deployment is an isolated process with its own:
 - WhatsApp session (`.wwebjs_auth/` directory)
 - Supabase project and database
 - `.env` file with all credentials and identifiers
-- Target group configuration
+- Group and admin configuration (`GROUP_REGISTRY`, `GROUP_ADMINS`)
 
 Nothing is shared between deployments. There are no multi-tenant concepts,
 shared databases, or centralized authentication.
@@ -169,47 +204,49 @@ company.
 
 ---
 
-## Current Architecture Boundaries
-
-The WhatsApp listener and the pipeline are **intentionally decoupled** as of
-the current build. `runWhatsappListener.ts` logs received messages to the
-console but does not yet call `processIncomingMessages()` or interact with the
-database. Wiring them together is the next integration phase.
-
-The report generation path (`generateFormattedWeeklyReports`) is also not yet
-triggered automatically. It must be called explicitly — either from a script
-or a future cron job.
-
 ---
 
 ## Directory Structure
 
 ```
 src/
+  config/
+    groupRegistry.ts             GROUP_REGISTRY + GROUP_ADMINS parsing; GroupConfig type
+  commands/
+    commandParser.ts             Parse ".command args" syntax
+    commandHandler.ts            Execute commands; per-group active/inactive state
+    accessControl.ts             Admin vs public command classification; checkCommandAccess()
   parser/
-    jobMessageParser.ts
-    fullJobMessageParser.ts
+    jobMessageParser.ts          Single-line closing parser ("John $250 check")
+    fullJobMessageParser.ts      Full 3-section WhatsApp message parser
   reports/
-    weeklyReportGenerator.ts
-    reportFormatter.ts
+    weeklyReportGenerator.ts     Aggregate ParsedFullJobMessage[] → WeeklyReport
+    reportFormatter.ts           Format WeeklyReport → WhatsApp-ready text
   db/
-    types.ts
-    closedJobRepository.ts
-    inMemoryClosedJobRepository.ts
-    supabaseClient.ts
-    supabaseClosedJobRepository.ts
+    types.ts                     ClosedJobRecord, NewClosedJob, SaveResult
+    closedJobRepository.ts       ClosedJobRepository interface
+    inMemoryClosedJobRepository.ts  In-memory impl (tests and demos)
+    supabaseClient.ts            createSupabaseClient() factory
+    supabaseClosedJobRepository.ts  Supabase/PostgreSQL impl
   pipeline/
-    weeklyReportPipeline.ts
+    weeklyReportPipeline.ts      processIncomingMessages() + generateFormattedWeeklyReports()
+  scheduler/
+    weekRange.ts                 getPreviousWeekRange()
+    runWeeklyReport.ts           runWeeklyReport() — date-range → formatted result
+    weeklyCron.ts                startWeeklyCron() + executeWeeklyReport()
+  sender/
+    reportSender.ts              ReportSender interface
+    consoleReportSender.ts       Console implementation
   whatsapp/
-    whatsappClient.ts
-    runWhatsappListener.ts
+    whatsappClient.ts            createWhatsAppClient() — QR, auth, events
+    runWhatsappListener.ts       Entry point: multi-group listener with access control
   demo/
-    sampleMessages.ts
-    runWeeklyReportDemo.ts
+    sampleMessages.ts            Hard-coded sample messages for local demo
+    runWeeklyReportDemo.ts       End-to-end demo using in-memory repo
 
 supabase/
-  schema.sql
-  SETUP.md
+  schema.sql                     CREATE TABLE closed_jobs (run once in Supabase SQL Editor)
+  SETUP.md                       Supabase setup instructions
 
-tests/          (mirrors src/)
+tests/                           Mirrors src/ structure; jest + ts-jest
 ```

@@ -12,9 +12,13 @@ import {
 import { parseCommand } from "../commands/commandParser";
 import { CommandHandler } from "../commands/commandHandler";
 import { lookupGroup, GroupConfig } from "../config/groupRegistry";
+import { checkCommandAccess } from "../commands/accessControl";
 
 const UNREGISTERED_GROUP_MESSAGE =
   "Group is not registered. Please configure this group first.";
+
+const ACCESS_DENIED_MESSAGE =
+  "Access denied. You are not authorized to use this command.";
 
 function logProcessResult(result: ProcessResult, sourceMessageId: string): void {
   if (result.saved_count > 0) {
@@ -27,6 +31,7 @@ function logProcessResult(result: ProcessResult, sourceMessageId: string): void 
   }
 
   for (const inv of result.invalid_messages) {
+    // inv.reason is a parse-status string, never contains customer PII
     console.warn(`[Pipeline] Invalid      | ID: ${inv.source_message_id} | Reason: ${inv.reason}`);
   }
 }
@@ -48,7 +53,7 @@ function getOrCreateHandler(
     getNow: () => new Date(),
   });
   groupHandlers.set(groupId, handler);
-  console.log(`[WhatsApp] Handler created for group ${groupId} (company: ${groupConfig.company_id})`);
+  console.log(`[WhatsApp] Handler created | Group: ${groupId} | Company: ${groupConfig.company_id}`);
   return handler;
 }
 
@@ -62,14 +67,16 @@ async function handleCommand(
 
   if (!parsed) return;
 
-  console.log(`[Command] Received  : .${parsed.command} | ID: ${sourceId}`);
+  console.log(`[Command] Received      | .${parsed.command} | ID: ${sourceId}`);
 
   const prevActive = commandHandler.isActive();
   const response = await commandHandler.handle(parsed);
   const nowActive = commandHandler.isActive();
 
   if (prevActive !== nowActive) {
-    console.log(`[WhatsApp] Processing ${nowActive ? "ACTIVATED" : "DEACTIVATED"} | Group: ${message.id.remote}`);
+    console.log(
+      `[WhatsApp] Processing ${nowActive ? "ACTIVATED" : "DEACTIVATED"} | Group: ${message.id.remote}`
+    );
   }
 
   try {
@@ -109,6 +116,8 @@ async function handleMessage(
   if (!body) return;
 
   const chat = await message.getChat();
+  // Silently ignore all private messages — sensitive commands must only work
+  // inside registered groups (rule 5).
   if (!chat.isGroup) return;
 
   const groupId = chat.id._serialized;
@@ -120,9 +129,27 @@ async function handleMessage(
       try {
         await message.reply(UNREGISTERED_GROUP_MESSAGE);
       } catch (replyErr) {
-        console.error(`[Command] Reply failed for unregistered group ${groupId}`, replyErr);
+        console.error(`[Command] Reply failed  | Unregistered group: ${groupId}`, replyErr);
       }
-      console.warn(`[WhatsApp] Command from unregistered group: ${groupId}`);
+      console.warn(`[WhatsApp] Command from unregistered group | Group: ${groupId}`);
+      return;
+    }
+
+    // Extract sender ID — message.author is set for group messages (phone@c.us format)
+    const senderId: string = message.author ?? message.from;
+    const decision = checkCommandAccess(parsed.command, true, groupConfig, senderId);
+
+    if (!decision.granted) {
+      if (decision.reason === "access_denied") {
+        try {
+          await message.reply(ACCESS_DENIED_MESSAGE);
+        } catch (replyErr) {
+          console.error(`[Command] Reply failed  | ID: ${message.id._serialized}`, replyErr);
+        }
+        console.warn(
+          `[Command] Access denied | ID: ${message.id._serialized} | Group: ${groupId}`
+        );
+      }
       return;
     }
 
@@ -131,15 +158,10 @@ async function handleMessage(
     return;
   }
 
-  if (!groupConfig) {
-    // Silently ignore job messages from unregistered groups
-    return;
-  }
+  if (!groupConfig) return; // silently ignore job messages from unregistered groups
 
   const handler = getOrCreateHandler(groupHandlers, groupId, groupConfig, repository);
-  if (!handler.isActive()) {
-    return;
-  }
+  if (!handler.isActive()) return;
 
   await handleJobMessage(message, repository, groupConfig.company_id, groupId);
 }
@@ -160,6 +182,16 @@ async function main(): Promise<void> {
     console.log(`[WhatsApp] Group registry loaded — ${groupCount} group(s) registered.`);
   }
 
+  const adminsEnv = process.env.GROUP_ADMINS?.trim() ?? "";
+  if (!adminsEnv) {
+    console.warn(
+      "[WhatsApp] GROUP_ADMINS is not set. Admin commands (.start, .stop, .status, .report) will be denied to all users."
+    );
+    console.warn(
+      "[WhatsApp] Set GROUP_ADMINS=groupId:adminPhone@c.us|adminPhone2@c.us in your .env file."
+    );
+  }
+
   const supabaseClient = createSupabaseClient();
   const repository = new SupabaseClosedJobRepository(supabaseClient);
 
@@ -167,7 +199,9 @@ async function main(): Promise<void> {
 
   const groupHandlers = new Map<string, CommandHandler>();
 
-  console.log("[WhatsApp] Ready. Send .start in a registered group to activate processing.");
+  console.log(
+    "[WhatsApp] Ready. An authorized admin may send .start in a registered group to activate processing."
+  );
 
   const client = createWhatsAppClient();
 

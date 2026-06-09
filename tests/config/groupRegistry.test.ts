@@ -122,5 +122,76 @@ describe("lookupGroup — return type", () => {
     const result = lookupGroup(GROUP_A, REGISTRY);
     expect(result).not.toBeNull();
     expect(typeof (result as GroupConfig).company_id).toBe("string");
+    expect(Array.isArray((result as GroupConfig).authorized_admin_ids)).toBe(true);
+  });
+});
+
+// ─── authorized_admin_ids ─────────────────────────────────────────────────────
+
+describe("lookupGroup — authorized_admin_ids", () => {
+  const ADMIN_A1 = "1111111111@c.us";
+  const ADMIN_A2 = "2222222222@c.us";
+  const ADMIN_B = "3333333333@c.us";
+  const ADMINS = `${GROUP_A}:${ADMIN_A1}|${ADMIN_A2},${GROUP_B}:${ADMIN_B}`;
+
+  test("returns multiple admin IDs for Group A", () => {
+    const result = lookupGroup(GROUP_A, REGISTRY, ADMINS);
+    expect(result?.authorized_admin_ids).toEqual([ADMIN_A1, ADMIN_A2]);
+  });
+
+  test("returns single admin ID for Group B", () => {
+    const result = lookupGroup(GROUP_B, REGISTRY, ADMINS);
+    expect(result?.authorized_admin_ids).toEqual([ADMIN_B]);
+  });
+
+  test("returns empty array when adminsEnv is empty string", () => {
+    const result = lookupGroup(GROUP_A, REGISTRY, "");
+    expect(result?.authorized_admin_ids).toEqual([]);
+  });
+
+  test("returns empty array when group is not in adminsEnv", () => {
+    const admins = `${GROUP_B}:${ADMIN_B}`;
+    const result = lookupGroup(GROUP_A, REGISTRY, admins);
+    expect(result?.authorized_admin_ids).toEqual([]);
+  });
+
+  test("authorized_admin_ids is always an array (never undefined or null)", () => {
+    const result = lookupGroup(GROUP_A, REGISTRY, "");
+    expect(Array.isArray(result?.authorized_admin_ids)).toBe(true);
+  });
+
+  test("trims whitespace around individual admin IDs", () => {
+    const admins = `${GROUP_A}: ${ADMIN_A1} | ${ADMIN_A2} `;
+    const result = lookupGroup(GROUP_A, REGISTRY, admins);
+    expect(result?.authorized_admin_ids).toEqual([ADMIN_A1, ADMIN_A2]);
+  });
+
+  test("skips empty segments after pipe split", () => {
+    const admins = `${GROUP_A}:${ADMIN_A1}||`;
+    const result = lookupGroup(GROUP_A, REGISTRY, admins);
+    expect(result?.authorized_admin_ids).toEqual([ADMIN_A1]);
+  });
+
+  test("reads GROUP_ADMINS from process.env when adminsEnv param is omitted", () => {
+    const saved = process.env.GROUP_ADMINS;
+    process.env.GROUP_ADMINS = `${GROUP_A}:${ADMIN_A1}`;
+    try {
+      const result = lookupGroup(GROUP_A, REGISTRY);
+      expect(result?.authorized_admin_ids).toEqual([ADMIN_A1]);
+    } finally {
+      if (saved === undefined) delete process.env.GROUP_ADMINS;
+      else process.env.GROUP_ADMINS = saved;
+    }
+  });
+
+  test("returns empty array when GROUP_ADMINS env is not set and adminsEnv omitted", () => {
+    const saved = process.env.GROUP_ADMINS;
+    delete process.env.GROUP_ADMINS;
+    try {
+      const result = lookupGroup(GROUP_A, REGISTRY);
+      expect(result?.authorized_admin_ids).toEqual([]);
+    } finally {
+      if (saved !== undefined) process.env.GROUP_ADMINS = saved;
+    }
   });
 });
