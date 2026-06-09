@@ -13,6 +13,8 @@ import {
 // Wednesday 2024-01-17 at 09:00 local — previous week is Mon Jan 8 – Sun Jan 14
 const NOW = new Date(2024, 0, 17, 9, 0, 0);
 const IN_RANGE = new Date(2024, 0, 10, 10, 0, 0); // within previous week
+const TEST_GROUP = "test-group@g.us";
+const TEST_COMPANY = "test-company";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,6 +29,8 @@ function makeMockSender() {
 function makeMessage(id: string, closing = "John $250 check"): IncomingMessage {
   return {
     source_message_id: id,
+    whatsapp_group_id: TEST_GROUP,
+    company_id: TEST_COMPANY,
     raw_message: [
       "Test Company",
       "",
@@ -72,21 +76,21 @@ describe("executeWeeklyReport — empty week", () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender } = makeMockSender();
     await expect(
-      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW)
+      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP)
     ).resolves.toBeUndefined();
   });
 
   test("calls sendMainReport exactly once even with no jobs", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     expect(sendMainReport).toHaveBeenCalledTimes(1);
   });
 
   test("does not call sendTechnicianReport when no jobs exist", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendTechnicianReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     expect(sendTechnicianReport).not.toHaveBeenCalled();
   });
 });
@@ -97,14 +101,14 @@ describe("executeWeeklyReport — manager report", () => {
   test("passes the correct manager recipient to sendMainReport", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "the-manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "the-manager", "default-tech", NOW, TEST_GROUP);
     expect(sendMainReport).toHaveBeenCalledWith(expect.any(String), "the-manager");
   });
 
   test("sendMainReport receives a non-empty string as report text", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     const [reportText] = sendMainReport.mock.calls[0] as [string, string];
     expect(typeof reportText).toBe("string");
     expect(reportText.length).toBeGreaterThan(0);
@@ -113,7 +117,7 @@ describe("executeWeeklyReport — manager report", () => {
   test("empty-week report text contains 'Total Jobs: 0'", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     const [reportText] = sendMainReport.mock.calls[0] as [string, string];
     expect(reportText).toContain("Total Jobs: 0");
   });
@@ -121,7 +125,7 @@ describe("executeWeeklyReport — manager report", () => {
   test("report text with jobs contains correct total", async () => {
     const repo = await repoWithJobs(["John $250 check", "Mike 700 cc"]);
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     const [reportText] = sendMainReport.mock.calls[0] as [string, string];
     expect(reportText).toContain("Total Jobs: 2");
     expect(reportText).toContain("$950.00");
@@ -138,7 +142,7 @@ describe("executeWeeklyReport — technician reports", () => {
       "Sara 150 cash",
     ]);
     const { sender, sendTechnicianReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     expect(sendTechnicianReport).toHaveBeenCalledTimes(3);
   });
 
@@ -148,7 +152,7 @@ describe("executeWeeklyReport — technician reports", () => {
       "Mike 700 cc",
     ]);
     const { sender, sendTechnicianReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "tech-default", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "tech-default", NOW, TEST_GROUP);
     const recipients = (sendTechnicianReport.mock.calls as [string, string, string][]).map(
       ([, , r]) => r
     );
@@ -162,7 +166,7 @@ describe("executeWeeklyReport — technician reports", () => {
       "Sara 150 cash",
     ]);
     const { sender, sendTechnicianReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     const names = (sendTechnicianReport.mock.calls as [string, string, string][]).map(
       ([, name]) => name
     );
@@ -178,7 +182,7 @@ describe("executeWeeklyReport — technician reports", () => {
       "Sara 150 cash",
     ]);
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     expect(sendMainReport).toHaveBeenCalledTimes(1);
   });
 
@@ -188,7 +192,7 @@ describe("executeWeeklyReport — technician reports", () => {
       "Mike 700 cc",
     ]);
     const { sender, sendTechnicianReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
     for (const [text] of sendTechnicianReport.mock.calls as [string, string, string][]) {
       expect(typeof text).toBe("string");
       expect(text.length).toBeGreaterThan(0);
@@ -204,7 +208,7 @@ describe("executeWeeklyReport — error isolation", () => {
     const { sender, sendMainReport } = makeMockSender();
     sendMainReport.mockRejectedValue(new Error("network error"));
     await expect(
-      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW)
+      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP)
     ).resolves.toBeUndefined();
   });
 
@@ -220,7 +224,7 @@ describe("executeWeeklyReport — error isolation", () => {
       .mockResolvedValue(undefined);
 
     await expect(
-      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW)
+      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP)
     ).resolves.toBeUndefined();
 
     expect(sendTechnicianReport).toHaveBeenCalledTimes(3);
@@ -233,7 +237,7 @@ describe("executeWeeklyReport — error isolation", () => {
     sendTechnicianReport.mockRejectedValue(new Error("tech fail"));
 
     await expect(
-      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW)
+      executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP)
     ).resolves.toBeUndefined();
   });
 
@@ -247,7 +251,7 @@ describe("executeWeeklyReport — error isolation", () => {
       .mockRejectedValueOnce(new Error("first failed"))
       .mockResolvedValue(undefined);
 
-    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW);
+    await executeWeeklyReport(repo, sender, "manager", "default-tech", NOW, TEST_GROUP);
 
     // Second call still receives the correct arguments
     const secondCall = sendTechnicianReport.mock.calls[1] as [string, string, string];
@@ -263,7 +267,7 @@ describe("executeWeeklyReport — recipient forwarding", () => {
   test("empty string recipient is forwarded without error", async () => {
     const repo = new InMemoryClosedJobRepository();
     const { sender, sendMainReport } = makeMockSender();
-    await executeWeeklyReport(repo, sender, "", "", NOW);
+    await executeWeeklyReport(repo, sender, "", "", NOW, TEST_GROUP);
     expect(sendMainReport).toHaveBeenCalledWith(expect.any(String), "");
   });
 });

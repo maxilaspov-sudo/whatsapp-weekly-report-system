@@ -14,17 +14,23 @@ export interface WeeklyReportResult {
 
 /**
  * Calculates the previous week range relative to `now`, loads all jobs within
- * that range from the repository, and returns formatted report text.
+ * that range scoped to `whatsapp_group_id`, and returns formatted report text.
  *
  * Does not send messages. Does not read environment variables.
- * The repository is injected by the caller.
+ * The repository and group ID are supplied by the caller.
  */
 export async function runWeeklyReport(
   repository: ClosedJobRepository,
-  now: Date
+  now: Date,
+  whatsapp_group_id: string
 ): Promise<WeeklyReportResult> {
   const { startDate, endDate } = getPreviousWeekRange(now);
-  const reports = await generateFormattedWeeklyReports(repository, startDate, endDate);
+  const reports = await generateFormattedWeeklyReports(
+    repository,
+    startDate,
+    endDate,
+    whatsapp_group_id
+  );
 
   return {
     week_start: startDate,
@@ -46,12 +52,19 @@ async function main(): Promise<void> {
   const { createSupabaseClient } = await import("../db/supabaseClient");
   const { SupabaseClosedJobRepository } = await import("../db/supabaseClosedJobRepository");
 
+  const targetGroupId = process.env.TARGET_WHATSAPP_GROUP_ID?.trim() ?? "";
+  if (!targetGroupId) {
+    console.error("[Report] TARGET_WHATSAPP_GROUP_ID is not set. Exiting.");
+    process.exit(1);
+  }
+
   const repository = new SupabaseClosedJobRepository(createSupabaseClient());
   const now = new Date();
 
   console.log("[Report] Generating weekly report...");
+  console.log(`[Report] Group : ${targetGroupId}`);
 
-  const result = await runWeeklyReport(repository, now);
+  const result = await runWeeklyReport(repository, now, targetGroupId);
 
   const weekLabel = `${result.week_start.toDateString()} — ${result.week_end.toDateString()}`;
   console.log(`[Report] Week : ${weekLabel}`);

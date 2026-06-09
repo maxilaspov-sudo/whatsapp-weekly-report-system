@@ -5,6 +5,8 @@ import { processIncomingMessages, IncomingMessage } from "../../src/pipeline/wee
 // Fixed reference point: Wednesday 2024-01-17 at noon local time.
 // Previous week is Mon 2024-01-08 – Sun 2024-01-14.
 const NOW = new Date(2024, 0, 17, 12, 0, 0);
+const TEST_GROUP = "test-group@g.us";
+const TEST_COMPANY = "test-company";
 
 // Timestamps for repository clock injection
 const IN_RANGE = new Date(2024, 0, 10, 10, 0, 0);       // Wed Jan 10 — inside previous week
@@ -14,6 +16,8 @@ const PAST = new Date(2023, 11, 31, 10, 0, 0);           // Dec 31 2023 — two 
 function makeMessage(id: string, closing = "John $250 check"): IncomingMessage {
   return {
     source_message_id: id,
+    whatsapp_group_id: TEST_GROUP,
+    company_id: TEST_COMPANY,
     raw_message: [
       "Test Company",
       "",
@@ -46,7 +50,7 @@ async function repoWith(
 describe("runWeeklyReport — empty week", () => {
   test("returns a WeeklyReportResult with all required fields", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const result = await runWeeklyReport(repo, NOW);
+    const result = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(result).toHaveProperty("week_start");
     expect(result).toHaveProperty("week_end");
     expect(result).toHaveProperty("main_report_text");
@@ -55,20 +59,20 @@ describe("runWeeklyReport — empty week", () => {
 
   test("main_report_text contains 'Total Jobs: 0'", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("Total Jobs: 0");
   });
 
   test("main_report_text is a non-empty string", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(typeof main_report_text).toBe("string");
     expect(main_report_text.length).toBeGreaterThan(0);
   });
 
   test("technician_report_texts is an empty array", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(technician_report_texts).toHaveLength(0);
   });
 });
@@ -78,7 +82,7 @@ describe("runWeeklyReport — empty week", () => {
 describe("runWeeklyReport — week range for Wed Jan 17 2024", () => {
   test("week_start is Mon Jan 8 2024", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { week_start } = await runWeeklyReport(repo, NOW);
+    const { week_start } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(week_start.getFullYear()).toBe(2024);
     expect(week_start.getMonth()).toBe(0);  // January
     expect(week_start.getDate()).toBe(8);
@@ -86,7 +90,7 @@ describe("runWeeklyReport — week range for Wed Jan 17 2024", () => {
 
   test("week_end is Sun Jan 14 2024", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { week_end } = await runWeeklyReport(repo, NOW);
+    const { week_end } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(week_end.getFullYear()).toBe(2024);
     expect(week_end.getMonth()).toBe(0);    // January
     expect(week_end.getDate()).toBe(14);
@@ -94,13 +98,13 @@ describe("runWeeklyReport — week range for Wed Jan 17 2024", () => {
 
   test("week_start is a Monday", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { week_start } = await runWeeklyReport(repo, NOW);
+    const { week_start } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(week_start.getDay()).toBe(1);
   });
 
   test("week_end is a Sunday", async () => {
     const repo = new InMemoryClosedJobRepository();
-    const { week_end } = await runWeeklyReport(repo, NOW);
+    const { week_end } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(week_end.getDay()).toBe(0);
   });
 });
@@ -113,7 +117,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike 700 cc", "Sara 150 cash"]
     );
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("Total Jobs: 3");
   });
 
@@ -122,7 +126,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike $350 zelle"]
     );
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("$600.00");
   });
 
@@ -131,7 +135,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE, IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike 700 cc", "Sara 150 cash", "John $300 zelle"]
     );
-    const { technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(technician_report_texts).toHaveLength(3);
   });
 
@@ -140,7 +144,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike 700 cc"]
     );
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("John");
     expect(main_report_text).toContain("Mike");
   });
@@ -150,7 +154,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE],
       ["John $250 check", "Sara 150 cash"]
     );
-    const { technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     const names = technician_report_texts.map((r) => r.technician_name);
     expect(names).toContain("John");
     expect(names).toContain("Sara");
@@ -161,7 +165,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike 700 cc"]
     );
-    const { technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     for (const r of technician_report_texts) {
       expect(typeof r.text).toBe("string");
       expect(r.text.length).toBeGreaterThan(0);
@@ -173,7 +177,7 @@ describe("runWeeklyReport — jobs within range", () => {
       [IN_RANGE, IN_RANGE, IN_RANGE],
       ["John $250 check", "John $300 zelle", "Mike 700 cc"]
     );
-    const { technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     const john = technician_report_texts.find((r) => r.technician_name === "John");
     expect(john).toBeDefined();
     expect(john!.text).toContain("Total Jobs: 2");
@@ -196,7 +200,7 @@ describe("runWeeklyReport — date range filtering", () => {
       ],
       repo
     );
-    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("Total Jobs: 1");
     expect(technician_report_texts).toHaveLength(1);
     expect(technician_report_texts[0].technician_name).toBe("John");
@@ -205,7 +209,7 @@ describe("runWeeklyReport — date range filtering", () => {
   test("repo with only out-of-range jobs produces an empty report", async () => {
     const repo = new InMemoryClosedJobRepository(() => FUTURE);
     await processIncomingMessages([makeMessage("msg-1", "John $250 check")], repo);
-    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("Total Jobs: 0");
     expect(technician_report_texts).toHaveLength(0);
   });
@@ -221,7 +225,7 @@ describe("runWeeklyReport — year boundary", () => {
     const repo = new InMemoryClosedJobRepository(() => dec25);
     await processIncomingMessages([makeMessage("msg-1", "John $500 check")], repo);
 
-    const result = await runWeeklyReport(repo, newYearNow);
+    const result = await runWeeklyReport(repo, newYearNow, TEST_GROUP);
     expect(result.main_report_text).toContain("Total Jobs: 1");
     expect(result.main_report_text).toContain("$500.00");
     expect(result.week_start.getFullYear()).toBe(2024);
@@ -244,7 +248,7 @@ describe("runWeeklyReport — multiple technicians", () => {
         "John $300 ach",
       ]
     );
-    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW);
+    const { main_report_text, technician_report_texts } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(technician_report_texts).toHaveLength(4);
     expect(main_report_text).toContain("Total Jobs: 5");
     // 250 + 700 + 150 + 1250.50 + 300 = 2650.50
@@ -256,7 +260,7 @@ describe("runWeeklyReport — multiple technicians", () => {
       [IN_RANGE, IN_RANGE, IN_RANGE],
       ["John $250 check", "Mike 700 cc", "Sara 150 cash"]
     );
-    const { main_report_text } = await runWeeklyReport(repo, NOW);
+    const { main_report_text } = await runWeeklyReport(repo, NOW, TEST_GROUP);
     expect(main_report_text).toContain("Check");
     expect(main_report_text).toContain("Credit Card");
     expect(main_report_text).toContain("Cash");

@@ -8,6 +8,7 @@
  * The mock client simulates Supabase's fluent builder pattern:
  *   client.from(table).insert(data).select().single()
  *   client.from(table).select('*').gte(...).lte(...)
+ *   client.from(table).select('*').gte(...).lte(...).eq(col, val)
  *   client.from(table).select('*').eq(col, val).maybeSingle()
  *   client.from(table).select('*')          ← awaited directly
  */
@@ -22,6 +23,8 @@ import { NewClosedJob } from "../../src/db/types";
 interface MockRow {
   id: string;
   raw_message: string;
+  company_id: string;
+  whatsapp_group_id: string;
   company_name: string;
   customer_name: string;
   phone: string;
@@ -40,6 +43,8 @@ function makeRow(overrides: Partial<MockRow> = {}): MockRow {
   return {
     id: "00000000-0000-0000-0000-000000000001",
     raw_message: "Sunshine Home Services\n\nName: Test Customer\nPhone: (205) 555-0000\nAddress: 1 Test St\nJob type: Test\nAppointment Monday\n\nJohn $250 check",
+    company_id: "sunshine-hvac",
+    whatsapp_group_id: "120363111111111@g.us",
     company_name: "Sunshine Home Services",
     customer_name: "Test Customer",
     phone: "(205) 555-0000",
@@ -59,6 +64,8 @@ function makeRow(overrides: Partial<MockRow> = {}): MockRow {
 function makeNewJob(overrides: Partial<NewClosedJob> = {}): NewClosedJob {
   return {
     raw_message: "raw",
+    company_id: "sunshine-hvac",
+    whatsapp_group_id: "120363111111111@g.us",
     company_name: "Sunshine Home Services",
     customer_name: "Test Customer",
     phone: "(205) 555-0000",
@@ -165,6 +172,16 @@ describe("SupabaseClosedJobRepository.save — success", () => {
     expect(result.ok && result.record.needs_review).toBe(false);
   });
 
+  test("record.company_id matches row", async () => {
+    const result = await repo.save(makeNewJob());
+    expect(result.ok && result.record.company_id).toBe("sunshine-hvac");
+  });
+
+  test("record.whatsapp_group_id matches row", async () => {
+    const result = await repo.save(makeNewJob());
+    expect(result.ok && result.record.whatsapp_group_id).toBe("120363111111111@g.us");
+  });
+
   test("closed_amount is converted via Number() even when stored as numeric string", async () => {
     // Defensive: some drivers might deserialize numeric as string
     const rowWithStringAmount = { ...row, closed_amount: "250.50" as unknown as number };
@@ -246,6 +263,73 @@ describe("SupabaseClosedJobRepository.findByDateRange", () => {
     await expect(
       repo.findByDateRange(new Date("2024-01-01"), new Date("2024-01-31"))
     ).rejects.toThrow("[SupabaseRepo] findByDateRange failed");
+  });
+});
+
+// ─── findByDateRangeForGroup ──────────────────────────────────────────────────
+
+describe("SupabaseClosedJobRepository.findByDateRangeForGroup", () => {
+  const row1 = makeRow({ source_message_id: "msg-1", closed_amount: 100, whatsapp_group_id: "g1@g.us" });
+  const row2 = makeRow({ source_message_id: "msg-2", closed_amount: 200, whatsapp_group_id: "g1@g.us" });
+
+  test("returns empty array when no rows", async () => {
+    const repo = new SupabaseClosedJobRepository(
+      makeClient({ data: [], error: null })
+    );
+    const results = await repo.findByDateRangeForGroup(
+      new Date("2024-01-01"),
+      new Date("2024-01-07"),
+      "g1@g.us"
+    );
+    expect(results).toHaveLength(0);
+  });
+
+  test("returns one mapped record", async () => {
+    const repo = new SupabaseClosedJobRepository(
+      makeClient({ data: [row1], error: null })
+    );
+    const results = await repo.findByDateRangeForGroup(
+      new Date("2024-01-01"),
+      new Date("2024-01-31"),
+      "g1@g.us"
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].closed_amount).toBe(100);
+    expect(results[0].whatsapp_group_id).toBe("g1@g.us");
+  });
+
+  test("returns multiple mapped records", async () => {
+    const repo = new SupabaseClosedJobRepository(
+      makeClient({ data: [row1, row2], error: null })
+    );
+    const results = await repo.findByDateRangeForGroup(
+      new Date("2024-01-01"),
+      new Date("2024-01-31"),
+      "g1@g.us"
+    );
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.closed_amount)).toEqual([100, 200]);
+  });
+
+  test("converts created_at to Date", async () => {
+    const repo = new SupabaseClosedJobRepository(
+      makeClient({ data: [row1], error: null })
+    );
+    const results = await repo.findByDateRangeForGroup(
+      new Date("2024-01-01"),
+      new Date("2024-01-31"),
+      "g1@g.us"
+    );
+    expect(results[0].created_at).toBeInstanceOf(Date);
+  });
+
+  test("throws on DB error", async () => {
+    const repo = new SupabaseClosedJobRepository(
+      makeErrorClient("42P01", "table not found")
+    );
+    await expect(
+      repo.findByDateRangeForGroup(new Date("2024-01-01"), new Date("2024-01-31"), "g1@g.us")
+    ).rejects.toThrow("[SupabaseRepo] findByDateRangeForGroup failed");
   });
 });
 
@@ -343,6 +427,8 @@ describe("SupabaseClosedJobRepository — field mapping completeness", () => {
   test("all ClosedJobRecord fields are present in the returned record", async () => {
     const row = makeRow({
       id: "uuid-123",
+      company_id: "acme-corp",
+      whatsapp_group_id: "group-xyz@g.us",
       company_name: "Acme Corp",
       customer_name: "Jane Doe",
       phone: "555-1234",
@@ -365,6 +451,8 @@ describe("SupabaseClosedJobRepository — field mapping completeness", () => {
 
     const { record } = result;
     expect(record.id).toBe("uuid-123");
+    expect(record.company_id).toBe("acme-corp");
+    expect(record.whatsapp_group_id).toBe("group-xyz@g.us");
     expect(record.company_name).toBe("Acme Corp");
     expect(record.customer_name).toBe("Jane Doe");
     expect(record.phone).toBe("555-1234");

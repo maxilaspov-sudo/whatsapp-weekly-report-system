@@ -6,11 +6,15 @@ import { processIncomingMessages, IncomingMessage } from "../../src/pipeline/wee
 // Fixed reference point: Wednesday 2024-01-17 — previous week Mon Jan 8 – Sun Jan 14
 const NOW = new Date(2024, 0, 17, 12, 0, 0);
 const IN_RANGE = new Date(2024, 0, 10, 10, 0, 0);
+const TEST_GROUP = "test-group@g.us";
+const TEST_COMPANY = "test-company";
 
 function makeContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     repository: new InMemoryClosedJobRepository(),
     repositoryType: "in-memory",
+    whatsapp_group_id: TEST_GROUP,
+    company_id: TEST_COMPANY,
     getNow: () => NOW,
     ...overrides,
   };
@@ -25,6 +29,8 @@ async function cmd(handler: CommandHandler, text: string): Promise<string> {
 function makeMessage(id: string, closing = "John $250 check"): IncomingMessage {
   return {
     source_message_id: id,
+    whatsapp_group_id: TEST_GROUP,
+    company_id: TEST_COMPANY,
     raw_message: [
       "Test Company",
       "",
@@ -166,6 +172,18 @@ describe("CommandHandler — .status", () => {
     const response = await cmd(handler, ".status");
     expect(response.toLowerCase()).toContain("monday");
   });
+
+  test("includes the whatsapp_group_id", async () => {
+    const handler = new CommandHandler(makeContext());
+    const response = await cmd(handler, ".status");
+    expect(response).toContain(TEST_GROUP);
+  });
+
+  test("includes the company_id", async () => {
+    const handler = new CommandHandler(makeContext());
+    const response = await cmd(handler, ".status");
+    expect(response).toContain(TEST_COMPANY);
+  });
 });
 
 // ─── .format ─────────────────────────────────────────────────────────────────
@@ -295,6 +313,7 @@ describe("CommandHandler — .report (repository error)", () => {
     const failingRepo = {
       save: jest.fn().mockRejectedValue(new Error("DB down")),
       findByDateRange: jest.fn().mockRejectedValue(new Error("DB down")),
+      findByDateRangeForGroup: jest.fn().mockRejectedValue(new Error("DB down")),
       findBySourceMessageId: jest.fn().mockRejectedValue(new Error("DB down")),
       listAll: jest.fn().mockRejectedValue(new Error("DB down")),
     };
@@ -304,6 +323,37 @@ describe("CommandHandler — .report (repository error)", () => {
     const handler = new CommandHandler(context);
     const response = await cmd(handler, ".report");
     expect(response.toLowerCase()).toContain("failed");
+  });
+});
+
+// ─── .report only returns current group's jobs ────────────────────────────────
+
+describe("CommandHandler — .report group scoping", () => {
+  test(".report only returns jobs from the handler's whatsapp_group_id", async () => {
+    const OTHER_GROUP = "other-group@g.us";
+    const repo = new InMemoryClosedJobRepository(() => IN_RANGE);
+
+    // Save jobs for TEST_GROUP and OTHER_GROUP
+    await processIncomingMessages(
+      [
+        makeMessage("msg-1", "John $250 check"),  // TEST_GROUP
+        {
+          source_message_id: "msg-other",
+          whatsapp_group_id: OTHER_GROUP,
+          company_id: "other-company",
+          raw_message: makeMessage("msg-other", "Sara $9999 cash").raw_message,
+        },
+      ],
+      repo
+    );
+
+    // Handler is scoped to TEST_GROUP
+    const handler = new CommandHandler(makeContext({ repository: repo }));
+    const response = await cmd(handler, ".report");
+
+    // Only TEST_GROUP job (John $250) should appear
+    expect(response).toContain("Total Jobs: 1");
+    expect(response).not.toContain("9999");
   });
 });
 

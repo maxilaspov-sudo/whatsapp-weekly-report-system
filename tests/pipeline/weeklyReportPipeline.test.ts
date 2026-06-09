@@ -7,6 +7,9 @@ import {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
+const TEST_GROUP = "test-group@g.us";
+const TEST_COMPANY = "test-company";
+
 function makeValidMessage(
   id: string,
   opts: {
@@ -17,6 +20,8 @@ function makeValidMessage(
     jobType?: string;
     appointment?: string;
     closing?: string;
+    whatsapp_group_id?: string;
+    company_id?: string;
   } = {}
 ): IncomingMessage {
   const company = opts.company ?? "Sunshine Home Services";
@@ -29,6 +34,8 @@ function makeValidMessage(
 
   return {
     source_message_id: id,
+    whatsapp_group_id: opts.whatsapp_group_id ?? TEST_GROUP,
+    company_id: opts.company_id ?? TEST_COMPANY,
     raw_message: [
       company,
       "",
@@ -44,7 +51,12 @@ function makeValidMessage(
 }
 
 function makeInvalidMessage(id: string, raw_message: string): IncomingMessage {
-  return { source_message_id: id, raw_message };
+  return {
+    source_message_id: id,
+    whatsapp_group_id: TEST_GROUP,
+    company_id: TEST_COMPANY,
+    raw_message,
+  };
 }
 
 // ─── processIncomingMessages — all valid ─────────────────────────────────────
@@ -103,6 +115,20 @@ describe("processIncomingMessages — all valid messages", () => {
     await processIncomingMessages([makeValidMessage("unique-id-abc")], repo);
     const record = await repo.findBySourceMessageId("unique-id-abc");
     expect(record?.source_message_id).toBe("unique-id-abc");
+  });
+
+  test("saves whatsapp_group_id from IncomingMessage", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    await processIncomingMessages([makeValidMessage("msg-1")], repo);
+    const record = await repo.findBySourceMessageId("msg-1");
+    expect(record?.whatsapp_group_id).toBe(TEST_GROUP);
+  });
+
+  test("saves company_id from IncomingMessage", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    await processIncomingMessages([makeValidMessage("msg-1")], repo);
+    const record = await repo.findBySourceMessageId("msg-1");
+    expect(record?.company_id).toBe(TEST_COMPANY);
   });
 });
 
@@ -270,7 +296,8 @@ describe("generateFormattedWeeklyReports — empty week", () => {
     const reports = await generateFormattedWeeklyReports(
       repo,
       new Date("2024-01-01"),
-      new Date("2024-01-07")
+      new Date("2024-01-07"),
+      TEST_GROUP
     );
 
     expect(typeof reports.main_report_text).toBe("string");
@@ -283,7 +310,8 @@ describe("generateFormattedWeeklyReports — empty week", () => {
     const reports = await generateFormattedWeeklyReports(
       repo,
       new Date("2024-01-01"),
-      new Date("2024-01-07")
+      new Date("2024-01-07"),
+      TEST_GROUP
     );
 
     expect(reports.main_report_text).toContain("Total Jobs: 0");
@@ -317,8 +345,8 @@ describe("generateFormattedWeeklyReports — date range filtering", () => {
       repo
     );
 
-    const week1 = await generateFormattedWeeklyReports(repo, week1Start, week1End);
-    const week2 = await generateFormattedWeeklyReports(repo, week2Start, week2End);
+    const week1 = await generateFormattedWeeklyReports(repo, week1Start, week1End, TEST_GROUP);
+    const week2 = await generateFormattedWeeklyReports(repo, week2Start, week2End, TEST_GROUP);
 
     expect(week1.main_report_text).toContain("Total Jobs: 2");
     expect(week2.main_report_text).toContain("Total Jobs: 1");
@@ -342,7 +370,8 @@ describe("generateFormattedWeeklyReports — date range filtering", () => {
     const reports = await generateFormattedWeeklyReports(
       repo,
       new Date("2024-01-01"),
-      new Date("2024-01-07")
+      new Date("2024-01-07"),
+      TEST_GROUP
     );
 
     expect(reports.technician_report_texts).toHaveLength(1);
@@ -364,7 +393,7 @@ describe("generateFormattedWeeklyReports — formatted output", () => {
       ],
       repo
     );
-    return generateFormattedWeeklyReports(repo, new Date("2000-01-01"), new Date("2099-12-31"));
+    return generateFormattedWeeklyReports(repo, new Date("2000-01-01"), new Date("2099-12-31"), TEST_GROUP);
   }
 
   test("main report contains correct total jobs count", async () => {
@@ -439,7 +468,8 @@ describe("full pipeline integration", () => {
     const reports = await generateFormattedWeeklyReports(
       repo,
       new Date("2000-01-01"),
-      new Date("2099-12-31")
+      new Date("2099-12-31"),
+      TEST_GROUP
     );
 
     expect(reports.main_report_text).toContain("Total Jobs: 2");
@@ -454,7 +484,8 @@ describe("full pipeline integration", () => {
     const reports = await generateFormattedWeeklyReports(
       repo,
       new Date("2000-01-01"),
-      new Date("2099-12-31")
+      new Date("2099-12-31"),
+      TEST_GROUP
     );
 
     expect(reports.main_report_text).toContain("Total Jobs: 1");

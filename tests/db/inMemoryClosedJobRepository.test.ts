@@ -10,6 +10,8 @@ function makeJob(overrides: Partial<NewClosedJob> = {}): NewClosedJob {
   return {
     source_message_id: `msg-${msgCounter}`,
     raw_message: "raw message text",
+    company_id: "test-company",
+    whatsapp_group_id: "test-group@g.us",
     company_name: "Sunshine Home Services",
     customer_name: "Steve Mcgee",
     phone: "(205) 999-9284",
@@ -66,6 +68,8 @@ describe("save — success", () => {
     const job = makeJob({
       source_message_id: "wa-abc-123",
       raw_message: "the full original message",
+      company_id: "acme-hvac",
+      whatsapp_group_id: "group-123@g.us",
       company_name: "Acme HVAC",
       customer_name: "Patricia Lane",
       phone: "(205) 555-0182",
@@ -83,6 +87,8 @@ describe("save — success", () => {
 
     expect(r.source_message_id).toBe("wa-abc-123");
     expect(r.raw_message).toBe("the full original message");
+    expect(r.company_id).toBe("acme-hvac");
+    expect(r.whatsapp_group_id).toBe("group-123@g.us");
     expect(r.company_name).toBe("Acme HVAC");
     expect(r.customer_name).toBe("Patricia Lane");
     expect(r.phone).toBe("(205) 555-0182");
@@ -324,6 +330,68 @@ describe("findByDateRange", () => {
   });
 });
 
+// ─── findByDateRangeForGroup ──────────────────────────────────────────────────
+
+describe("findByDateRangeForGroup", () => {
+  const GROUP_A = "group-a@g.us";
+  const GROUP_B = "group-b@g.us";
+  const ALWAYS = new Date("2000-01-01");
+  const NEVER = new Date("2099-12-31");
+
+  test("returns empty array from empty repository", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    const results = await repo.findByDateRangeForGroup(ALWAYS, NEVER, GROUP_A);
+    expect(results).toEqual([]);
+  });
+
+  test("returns only records for the matching group", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    await repo.save(makeJob({ source_message_id: "a1", whatsapp_group_id: GROUP_A }));
+    await repo.save(makeJob({ source_message_id: "b1", whatsapp_group_id: GROUP_B }));
+    await repo.save(makeJob({ source_message_id: "a2", whatsapp_group_id: GROUP_A }));
+
+    const results = await repo.findByDateRangeForGroup(ALWAYS, NEVER, GROUP_A);
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.source_message_id)).toEqual(expect.arrayContaining(["a1", "a2"]));
+  });
+
+  test("returns empty array for a group with no records", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    await repo.save(makeJob({ source_message_id: "a1", whatsapp_group_id: GROUP_A }));
+
+    const results = await repo.findByDateRangeForGroup(ALWAYS, NEVER, GROUP_B);
+    expect(results).toEqual([]);
+  });
+
+  test("combines date range and group filters correctly", async () => {
+    const inRange = new Date("2024-01-15T10:00:00Z");
+    const outOfRange = new Date("2024-03-01T10:00:00Z");
+
+    let tick = 0;
+    const clocks = [inRange, outOfRange];
+    const repo = new InMemoryClosedJobRepository(() => clocks[tick++] ?? inRange);
+
+    await repo.save(makeJob({ source_message_id: "a-in",  whatsapp_group_id: GROUP_A }));
+    await repo.save(makeJob({ source_message_id: "a-out", whatsapp_group_id: GROUP_A }));
+
+    const results = await repo.findByDateRangeForGroup(
+      new Date("2024-01-01"),
+      new Date("2024-01-31"),
+      GROUP_A
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0].source_message_id).toBe("a-in");
+  });
+
+  test("Group B records do not appear in Group A scoped query", async () => {
+    const repo = new InMemoryClosedJobRepository();
+    await repo.save(makeJob({ source_message_id: "b1", whatsapp_group_id: GROUP_B }));
+
+    const results = await repo.findByDateRangeForGroup(ALWAYS, NEVER, GROUP_A);
+    expect(results).toHaveLength(0);
+  });
+});
+
 // ─── interface contract: ClosedJobRepository ─────────────────────────────────
 
 describe("interface contract", () => {
@@ -331,6 +399,7 @@ describe("interface contract", () => {
     const repo = new InMemoryClosedJobRepository();
     expect(typeof repo.save).toBe("function");
     expect(typeof repo.findByDateRange).toBe("function");
+    expect(typeof repo.findByDateRangeForGroup).toBe("function");
     expect(typeof repo.findBySourceMessageId).toBe("function");
     expect(typeof repo.listAll).toBe("function");
   });
@@ -342,5 +411,6 @@ describe("interface contract", () => {
     expect(repo.listAll()).toBeInstanceOf(Promise);
     expect(repo.findBySourceMessageId("x")).toBeInstanceOf(Promise);
     expect(repo.findByDateRange(new Date(), new Date())).toBeInstanceOf(Promise);
+    expect(repo.findByDateRangeForGroup(new Date(), new Date(), "g")).toBeInstanceOf(Promise);
   });
 });

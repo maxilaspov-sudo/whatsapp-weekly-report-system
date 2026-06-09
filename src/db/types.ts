@@ -1,6 +1,8 @@
 export interface ClosedJobRecord {
   id: string;
   raw_message: string;
+  company_id: string;
+  whatsapp_group_id: string;
   company_name: string;
   customer_name: string;
   phone: string;

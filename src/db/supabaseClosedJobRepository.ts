@@ -14,6 +14,8 @@ import { ClosedJobRecord, NewClosedJob, SaveResult } from "./types";
 interface ClosedJobRow {
   id: string;
   raw_message: string;
+  company_id: string;
+  whatsapp_group_id: string;
   company_name: string;
   customer_name: string;
   phone: string;
@@ -37,6 +39,8 @@ function rowToRecord(row: ClosedJobRow): ClosedJobRecord {
   return {
     id: row.id,
     raw_message: row.raw_message,
+    company_id: row.company_id,
+    whatsapp_group_id: row.whatsapp_group_id,
     company_name: row.company_name,
     customer_name: row.customer_name,
     phone: row.phone,
@@ -87,6 +91,25 @@ export class SupabaseClosedJobRepository implements ClosedJobRepository {
 
     if (error) {
       throw new Error(`[SupabaseRepo] findByDateRange failed: ${error.message}`);
+    }
+
+    return (data as ClosedJobRow[]).map(rowToRecord);
+  }
+
+  async findByDateRangeForGroup(
+    start: Date,
+    end: Date,
+    whatsapp_group_id: string
+  ): Promise<ClosedJobRecord[]> {
+    const { data, error } = await this.client
+      .from(TABLE)
+      .select("*")
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString())
+      .eq("whatsapp_group_id", whatsapp_group_id);
+
+    if (error) {
+      throw new Error(`[SupabaseRepo] findByDateRangeForGroup failed: ${error.message}`);
     }
 
     return (data as ClosedJobRow[]).map(rowToRecord);

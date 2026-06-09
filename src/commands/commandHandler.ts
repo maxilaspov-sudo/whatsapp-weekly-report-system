@@ -5,6 +5,8 @@ import { runWeeklyReport } from "../scheduler/runWeeklyReport";
 export interface CommandContext {
   repository: ClosedJobRepository;
   repositoryType: string;
+  whatsapp_group_id: string;
+  company_id: string;
   getNow: () => Date;
 }
 
@@ -42,7 +44,7 @@ function buildFormatExample(): string {
 }
 
 /**
- * Handles bot commands and maintains in-memory processing state.
+ * Handles bot commands and maintains in-memory processing state per group.
  *
  * State is not persisted — a process restart resets `active` to false.
  * The context is injected so the handler can be tested without WhatsApp.
@@ -76,6 +78,8 @@ export class CommandHandler {
           `Status      : ${this._active ? "active" : "inactive"}`,
           `Cron        : scheduled (Monday 09:00)`,
           `Repository  : ${this.context.repositoryType}`,
+          `Group       : ${this.context.whatsapp_group_id || "(not set)"}`,
+          `Company     : ${this.context.company_id || "(not set)"}`,
         ].join("\n");
 
       case "format":
@@ -95,7 +99,11 @@ export class CommandHandler {
   private async handleReport(): Promise<string> {
     try {
       const now = this.context.getNow();
-      const result = await runWeeklyReport(this.context.repository, now);
+      const result = await runWeeklyReport(
+        this.context.repository,
+        now,
+        this.context.whatsapp_group_id
+      );
       const weekLabel = `${result.week_start.toDateString()} — ${result.week_end.toDateString()}`;
       return [`Week: ${weekLabel}`, "", result.main_report_text].join("\n");
     } catch (err) {

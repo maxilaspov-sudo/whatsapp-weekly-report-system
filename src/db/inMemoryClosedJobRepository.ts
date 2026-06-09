@@ -38,6 +38,19 @@ export class InMemoryClosedJobRepository implements ClosedJobRepository {
     );
   }
 
+  async findByDateRangeForGroup(
+    start: Date,
+    end: Date,
+    whatsapp_group_id: string
+  ): Promise<ClosedJobRecord[]> {
+    return Array.from(this.store.values()).filter(
+      (r) =>
+        r.created_at >= start &&
+        r.created_at <= end &&
+        r.whatsapp_group_id === whatsapp_group_id
+    );
+  }
+
   async findBySourceMessageId(source_message_id: string): Promise<ClosedJobRecord | null> {
     return this.store.get(source_message_id) ?? null;
   }

@@ -6,7 +6,8 @@ import { runWeeklyReport } from "./runWeeklyReport";
 export const WEEKLY_CRON_EXPRESSION = "0 9 * * 1";
 
 /**
- * Runs the weekly report and dispatches it through the provided sender.
+ * Runs the weekly report for a specific WhatsApp group and dispatches it
+ * through the provided sender.
  *
  * Exported separately from the cron scheduler so it can be tested directly
  * without triggering real scheduling.
@@ -18,11 +19,12 @@ export async function executeWeeklyReport(
   sender: ReportSender,
   managerRecipient: string,
   defaultTechRecipient: string,
-  now: Date
+  now: Date,
+  whatsapp_group_id: string
 ): Promise<void> {
   console.log("[Cron] Report execution started.");
 
-  const result = await runWeeklyReport(repository, now);
+  const result = await runWeeklyReport(repository, now, whatsapp_group_id);
 
   const weekLabel = `${result.week_start.toDateString()} — ${result.week_end.toDateString()}`;
   console.log(`[Cron] Week range : ${weekLabel}`);
@@ -56,8 +58,9 @@ export async function executeWeeklyReport(
 /**
  * Schedules executeWeeklyReport to run every Monday at 09:00 local server time.
  *
- * Reads MANAGER_REPORT_RECIPIENT and DEFAULT_TECHNICIAN_RECIPIENT from the
- * environment at startup and captures them in the callback closure.
+ * Reads MANAGER_REPORT_RECIPIENT, DEFAULT_TECHNICIAN_RECIPIENT, and
+ * TARGET_WHATSAPP_GROUP_ID from the environment at startup and captures them
+ * in the callback closure.
  * The process must stay alive (e.g. via a supervisor) for the schedule to fire.
  */
 export function startWeeklyCron(
@@ -66,6 +69,7 @@ export function startWeeklyCron(
 ): void {
   const managerRecipient = process.env.MANAGER_REPORT_RECIPIENT?.trim() ?? "";
   const defaultTechRecipient = process.env.DEFAULT_TECHNICIAN_RECIPIENT?.trim() ?? "";
+  const targetGroupId = process.env.TARGET_WHATSAPP_GROUP_ID?.trim() ?? "";
 
   if (!managerRecipient) {
     console.warn(
@@ -77,9 +81,15 @@ export function startWeeklyCron(
       "[Cron] DEFAULT_TECHNICIAN_RECIPIENT is not set — technician reports will have an empty recipient."
     );
   }
+  if (!targetGroupId) {
+    console.warn(
+      "[Cron] TARGET_WHATSAPP_GROUP_ID is not set — reports will be generated with an empty group filter."
+    );
+  }
 
   console.log("[Cron] Starting weekly report cron...");
   console.log(`[Cron] Schedule : ${WEEKLY_CRON_EXPRESSION} (every Monday at 09:00 local time)`);
+  console.log(`[Cron] Group    : ${targetGroupId || "(not set)"}`);
 
   cron.schedule(WEEKLY_CRON_EXPRESSION, async (context) => {
     try {
@@ -88,7 +98,8 @@ export function startWeeklyCron(
         sender,
         managerRecipient,
         defaultTechRecipient,
-        context.date
+        context.date,
+        targetGroupId
       );
     } catch (err) {
       console.error("[Cron] Unexpected error during report execution:", err);

@@ -16,6 +16,14 @@ CREATE TABLE IF NOT EXISTS closed_jobs (
   -- Original WhatsApp message — always preserved regardless of parse quality
   raw_message       text          NOT NULL,
 
+  -- Multi-company isolation fields.
+  -- company_id is the registry identifier from GROUP_REGISTRY env var.
+  -- whatsapp_group_id is the exact chat.id from the originating WhatsApp group.
+  -- Every report query MUST be scoped by whatsapp_group_id to prevent
+  -- jobs from one company appearing in another company's report.
+  company_id        text          NOT NULL,
+  whatsapp_group_id text          NOT NULL,
+
   -- Parsed fields from the full job message
   company_name      text          NOT NULL,
   customer_name     text          NOT NULL,
@@ -32,6 +40,8 @@ CREATE TABLE IF NOT EXISTS closed_jobs (
 
   -- Unique identifier from the originating WhatsApp message.
   -- The UNIQUE constraint is the database-level guard against double processing.
+  -- WhatsApp message IDs are globally unique (they include the group ID internally),
+  -- so this constraint is safe across groups.
   source_message_id text          NOT NULL UNIQUE,
 
   -- Flag for records that need human review (e.g. parse was partial)
@@ -41,3 +51,11 @@ CREATE TABLE IF NOT EXISTS closed_jobs (
 -- Index to accelerate weekly report date-range queries
 CREATE INDEX IF NOT EXISTS closed_jobs_created_at_idx
   ON closed_jobs (created_at);
+
+-- Index to accelerate group-scoped report queries
+CREATE INDEX IF NOT EXISTS closed_jobs_whatsapp_group_id_idx
+  ON closed_jobs (whatsapp_group_id);
+
+-- Index for company-level analytics and filtering
+CREATE INDEX IF NOT EXISTS closed_jobs_company_id_idx
+  ON closed_jobs (company_id);

@@ -8,6 +8,8 @@ import { formatMainWeeklyReport, formatTechnicianReport } from "../reports/repor
 export interface IncomingMessage {
   source_message_id: string;
   raw_message: string;
+  company_id: string;
+  whatsapp_group_id: string;
 }
 
 export interface InvalidMessageResult {
@@ -77,6 +79,8 @@ export async function processIncomingMessages(
 
     const newJob: NewClosedJob = {
       ...parseResult.data,
+      company_id: message.company_id,
+      whatsapp_group_id: message.whatsapp_group_id,
       source_message_id: message.source_message_id,
       needs_review: false,
     };
@@ -106,9 +110,10 @@ export async function processIncomingMessages(
 export async function generateFormattedWeeklyReports(
   repository: ClosedJobRepository,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  whatsapp_group_id: string
 ): Promise<FormattedWeeklyReports> {
-  const records = await repository.findByDateRange(startDate, endDate);
+  const records = await repository.findByDateRangeForGroup(startDate, endDate, whatsapp_group_id);
   const jobs = records.map(recordToJobMessage);
   const weeklyReport = generateWeeklyReport(jobs);
 
