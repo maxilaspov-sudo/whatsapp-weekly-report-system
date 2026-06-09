@@ -9,7 +9,8 @@
     "demo:weekly-report": "ts-node src/demo/runWeeklyReportDemo.ts",
     "whatsapp:listen": "ts-node src/whatsapp/runWhatsappListener.ts",
     "report:weekly": "ts-node src/scheduler/runWeeklyReport.ts",
-    "cron:weekly": "ts-node src/scheduler/weeklyCron.ts"
+    "cron:weekly": "ts-node src/scheduler/weeklyCron.ts",
+    "db:smoke": "ts-node src/db/supabaseSmokeTest.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
