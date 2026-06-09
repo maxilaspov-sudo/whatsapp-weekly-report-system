@@ -11,6 +11,7 @@ import {
 } from "../pipeline/weeklyReportPipeline";
 import { parseCommand } from "../commands/commandParser";
 import { CommandHandler } from "../commands/commandHandler";
+import { WhatsAppReportSender } from "./whatsappReportSender";
 import { lookupGroup, GroupConfig } from "../config/groupRegistry";
 import { checkCommandAccess } from "../commands/accessControl";
 
@@ -40,7 +41,8 @@ function getOrCreateHandler(
   groupHandlers: Map<string, CommandHandler>,
   groupId: string,
   groupConfig: GroupConfig,
-  repository: ClosedJobRepository
+  repository: ClosedJobRepository,
+  client: WAWebJS.Client
 ): CommandHandler {
   const existing = groupHandlers.get(groupId);
   if (existing) return existing;
@@ -51,6 +53,7 @@ function getOrCreateHandler(
     whatsapp_group_id: groupId,
     company_id: groupConfig.company_id,
     getNow: () => new Date(),
+    pdfReportSender: new WhatsAppReportSender(client),
   });
   groupHandlers.set(groupId, handler);
   console.log(`[WhatsApp] Handler created | Group: ${groupId} | Company: ${groupConfig.company_id}`);
@@ -120,7 +123,8 @@ async function handleJobMessage(
 async function handleMessage(
   message: WAWebJS.Message,
   repository: ClosedJobRepository,
-  groupHandlers: Map<string, CommandHandler>
+  groupHandlers: Map<string, CommandHandler>,
+  client: WAWebJS.Client
 ): Promise<void> {
   const body = message.body.trim();
   if (!body) return;
@@ -163,14 +167,14 @@ async function handleMessage(
       return;
     }
 
-    const handler = getOrCreateHandler(groupHandlers, groupId, groupConfig, repository);
+    const handler = getOrCreateHandler(groupHandlers, groupId, groupConfig, repository, client);
     await handleCommand(message, handler);
     return;
   }
 
   if (!groupConfig) return; // silently ignore job messages from unregistered groups
 
-  const handler = getOrCreateHandler(groupHandlers, groupId, groupConfig, repository);
+  const handler = getOrCreateHandler(groupHandlers, groupId, groupConfig, repository, client);
   if (!handler.isActive()) return;
 
   await handleJobMessage(message, repository, groupConfig.company_id, groupId);
@@ -217,7 +221,7 @@ async function main(): Promise<void> {
 
   client.on("message", async (message: WAWebJS.Message) => {
     try {
-      await handleMessage(message, repository, groupHandlers);
+      await handleMessage(message, repository, groupHandlers, client);
     } catch (err) {
       console.error("[WhatsApp] Error handling message:", err);
     }

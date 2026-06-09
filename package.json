@@ -13,11 +13,13 @@
     "db:smoke": "ts-node src/db/supabaseSmokeTest.ts",
     "db:insert-demo": "ts-node src/db/supabaseInsertDemo.ts",
     "db:cleanup-demo": "ts-node src/db/cleanupDemoRows.ts",
-    "system:health": "ts-node src/system/healthCheck.ts"
+    "system:health": "ts-node src/system/healthCheck.ts",
+    "report:pdf-demo": "ts-node src/pdf/pdfReportGenerator.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/qrcode-terminal": "^0.12.2",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.5",
@@ -35,6 +37,7 @@
     "@supabase/supabase-js": "^2.108.0",
     "dotenv": "^17.4.2",
     "node-cron": "^4.2.1",
+    "pdfkit": "^0.19.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.7"
   }

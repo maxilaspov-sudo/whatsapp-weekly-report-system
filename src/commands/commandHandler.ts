@@ -1,6 +1,8 @@
 import { ParsedCommand, SUPPORTED_COMMANDS } from "./commandParser";
 import { ClosedJobRepository } from "../db/closedJobRepository";
 import { runWeeklyReport } from "../scheduler/runWeeklyReport";
+import { getPreviousWeekRange } from "../scheduler/weekRange";
+import { PdfReportSender } from "../whatsapp/whatsappReportSender";
 
 export interface CommandContext {
   repository: ClosedJobRepository;
@@ -8,6 +10,7 @@ export interface CommandContext {
   whatsapp_group_id: string;
   company_id: string;
   getNow: () => Date;
+  pdfReportSender?: PdfReportSender;
 }
 
 const HELP_TEXT = [
@@ -99,6 +102,19 @@ export class CommandHandler {
   private async handleReport(): Promise<string> {
     try {
       const now = this.context.getNow();
+
+      if (this.context.pdfReportSender) {
+        const { startDate, endDate } = getPreviousWeekRange(now);
+        console.log(`[Command] Report PDF requested | Group: ${this.context.whatsapp_group_id}`);
+        await this.context.pdfReportSender.sendReportWithPdf(
+          this.context.whatsapp_group_id,
+          this.context.repository,
+          startDate,
+          endDate
+        );
+        return "PDF report sent.";
+      }
+
       const result = await runWeeklyReport(
         this.context.repository,
         now,
@@ -108,6 +124,15 @@ export class CommandHandler {
       return [`Week: ${weekLabel}`, "", result.main_report_text].join("\n");
     } catch (err) {
       console.error("[Command] .report failed:", err);
+      // Only surface the two user-facing PDF error strings; everything else
+      // (DB failures, unexpected errors) falls back to the generic message.
+      if (
+        err instanceof Error &&
+        (err.message === "Failed to generate report PDF." ||
+          err.message === "Failed to send report.")
+      ) {
+        return err.message;
+      }
       return "Report generation failed. Please try again.";
     }
   }
