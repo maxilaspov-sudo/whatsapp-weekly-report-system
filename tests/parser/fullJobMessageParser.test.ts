@@ -19,32 +19,32 @@ function expectFail(result: ReturnType<typeof parseFullJobMessage>): string {
   return result.error.reason;
 }
 
-// ─── canonical example from CLAUDE.md ───────────────────────────────────────
+// ─── canonical demo example ──────────────────────────────────────────────────
 
-const FULL_MESSAGE = `Pell City Dryer Vent Cleaning
+const FULL_MESSAGE = `Example Service Company
 
-Name: Steve Mcgee
-Phone: (205) 999-9284
-Address: 205 Fox Run Cir Pell City, AL 35125
+Name: Demo Customer
+Phone: (555) 000-0000
+Address: 123 Demo Street, Demo City, FL 00000
 Job type: Dryer vent cleaning
 Appointment Tuesday 02/06 @ 9am -11am
 
-John $250 check`;
+DemoTech $250 check`;
 
-describe("parseFullJobMessage — CLAUDE.md example", () => {
+describe("parseFullJobMessage — canonical demo example", () => {
   let data: ParsedFullJobMessage;
 
   beforeAll(() => {
     data = expectOk(parseFullJobMessage(FULL_MESSAGE));
   });
 
-  test("company_name", () => expect(data.company_name).toBe("Pell City Dryer Vent Cleaning"));
-  test("customer_name", () => expect(data.customer_name).toBe("Steve Mcgee"));
-  test("phone", () => expect(data.phone).toBe("(205) 999-9284"));
-  test("address", () => expect(data.address).toBe("205 Fox Run Cir Pell City, AL 35125"));
+  test("company_name", () => expect(data.company_name).toBe("Example Service Company"));
+  test("customer_name", () => expect(data.customer_name).toBe("Demo Customer"));
+  test("phone", () => expect(data.phone).toBe("(555) 000-0000"));
+  test("address", () => expect(data.address).toBe("123 Demo Street, Demo City, FL 00000"));
   test("service", () => expect(data.service).toBe("Dryer vent cleaning"));
   test("appointment", () => expect(data.appointment).toBe("Tuesday 02/06 @ 9am -11am"));
-  test("technician_name", () => expect(data.technician_name).toBe("John"));
+  test("technician_name", () => expect(data.technician_name).toBe("DemoTech"));
   test("closed_amount", () => expect(data.closed_amount).toBe(250));
   test("payment_method", () => expect(data.payment_method).toBe("Check"));
   test("raw_message is preserved", () => expect(data.raw_message).toBe(FULL_MESSAGE.trim()));
@@ -54,7 +54,7 @@ describe("parseFullJobMessage — CLAUDE.md example", () => {
 
 describe("parseFullJobMessage — closing line variations", () => {
   function makeMessage(closingLine: string): string {
-    return `Pell City Dryer Vent Cleaning\n\nName: Steve Mcgee\nPhone: (205) 999-9284\nAddress: 205 Fox Run Cir\nJob type: Dryer vent cleaning\nAppointment Tuesday 02/06 @ 9am\n\n${closingLine}`;
+    return `Example Service Company\n\nName: Demo Customer\nPhone: (555) 000-0000\nAddress: 123 Demo Street\nJob type: Dryer vent cleaning\nAppointment Tuesday 02/06 @ 9am\n\n${closingLine}`;
   }
 
   test("no dollar sign", () => {

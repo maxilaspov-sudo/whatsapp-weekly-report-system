@@ -68,15 +68,15 @@ supabase/
 Technicians post a message structured in three sections separated by blank lines:
 
 ```
-Sunshine Home Services
+Example Service Company
 
-Name: Steve Mcgee
-Phone: (205) 999-9284
-Address: 205 Fox Run Cir, Pell City, AL 35125
+Name: Demo Customer
+Phone: (555) 000-0000
+Address: 123 Demo Street, Demo City, FL 00000
 Job type: Dryer vent cleaning
 Appointment Tuesday 02/06 @ 9am - 11am
 
-John $250 check
+DemoTech $250 check
 ```
 
 The parser extracts: company, customer info, and the closing line (technician +

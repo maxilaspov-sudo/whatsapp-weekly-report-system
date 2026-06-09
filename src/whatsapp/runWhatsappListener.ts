@@ -105,6 +105,16 @@ async function handleJobMessage(
 
   const result = await processIncomingMessages([incoming], repository);
   logProcessResult(result, incoming.source_message_id);
+
+  if (result.invalid_messages.length > 0) {
+    try {
+      await message.reply(
+        "Invalid job format. Send .format to see the required format."
+      );
+    } catch (replyErr) {
+      console.error(`[Pipeline] Reply failed  | ID: ${sourceId}`, replyErr);
+    }
+  }
 }
 
 async function handleMessage(

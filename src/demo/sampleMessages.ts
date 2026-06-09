@@ -8,77 +8,77 @@
  */
 export const SAMPLE_MESSAGES: readonly string[] = [
   // ── Valid: John, Check ──────────────────────────────────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Steve Mcgee
-Phone: (205) 999-9284
-Address: 205 Fox Run Cir, Pell City, AL 35125
+Name: Demo Customer
+Phone: (555) 000-0000
+Address: 123 Demo Street, Demo City, FL 00000
 Job type: Dryer vent cleaning
 Appointment Tuesday 02/06 @ 9am - 11am
 
 John $250 check`,
 
   // ── Valid: Mike, Credit Card ────────────────────────────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Patricia Lane
-Phone: (205) 555-0182
-Address: 310 Oak St, Birmingham, AL 35201
+Name: Demo Customer 2
+Phone: (555) 000-0002
+Address: 456 Demo Avenue, Demo City, FL 00001
 Job type: AC service and tune-up
 Appointment Wednesday 02/07 @ 1pm - 3pm
 
 Mike 700 cc`,
 
   // ── Valid: Sara, Cash ────────────────────────────────────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Robert Tanner
-Phone: (205) 444-7823
-Address: 88 Maple Ave, Hoover, AL 35244
+Name: Demo Customer 3
+Phone: (555) 000-0003
+Address: 789 Demo Boulevard, Demo City, FL 00002
 Job type: Plumbing inspection
 Appointment Thursday 02/08 @ 10am - 12pm
 
 Sara 150 cash`,
 
   // ── Valid: John, Zelle (second job — will be grouped with first John) ────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Diana Ford
-Phone: (205) 333-6601
-Address: 14 Birch Ln, Vestavia Hills, AL 35216
+Name: Demo Customer 4
+Phone: (555) 000-0004
+Address: 101 Demo Lane, Demo City, FL 00003
 Job type: Carpet cleaning
 Appointment Friday 02/09 @ 2pm - 4pm
 
 John $300 zelle`,
 
   // ── Valid: Mike, Check (second job — grouped with first Mike) ───────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Carlos Rivera
-Phone: (205) 777-9900
-Address: 52 Pine Rd, Trussville, AL 35173
+Name: Demo Customer 5
+Phone: (555) 000-0005
+Address: 202 Demo Road, Demo City, FL 00004
 Job type: HVAC maintenance
 Appointment Saturday 02/10 @ 8am - 10am
 
 Mike $450 check`,
 
   // ── Valid: Tom, Venmo, decimal amount ───────────────────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Linda Graves
-Phone: (205) 222-5544
-Address: 901 Elm St, Irondale, AL 35210
+Name: Demo Customer 6
+Phone: (555) 000-0006
+Address: 303 Demo Circle, Demo City, FL 00005
 Job type: Appliance repair
 Appointment Monday 02/12 @ 11am - 1pm
 
 Tom $1250.50 venmo`,
 
   // ── Valid: Sara, Zelle (second job) ─────────────────────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Kevin Brooks
-Phone: (205) 888-1122
-Address: 76 Cedar Dr, Pelham, AL 35124
+Name: Demo Customer 7
+Phone: (555) 000-0007
+Address: 404 Demo Drive, Demo City, FL 00006
 Job type: Gutter cleaning
 Appointment Monday 02/12 @ 3pm - 5pm
 
@@ -88,11 +88,11 @@ Sara 200 zelle`,
   `Hey just checking in, will send the report later`,
 
   // ── INVALID: closing line has unknown payment method ────────────────────────
-  `Sunshine Home Services
+  `Example Service Company
 
-Name: Ghost Customer
-Phone: (205) 000-0000
-Address: 1 Unknown Pl, Nowhere, AL 00000
+Name: Demo Ghost
+Phone: (555) 000-9999
+Address: 1 Unknown Place, Demo Nowhere, FL 00000
 Job type: Mystery service
 Appointment Someday
 

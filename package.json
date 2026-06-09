@@ -10,7 +10,10 @@
     "whatsapp:listen": "ts-node src/whatsapp/runWhatsappListener.ts",
     "report:weekly": "ts-node src/scheduler/runWeeklyReport.ts",
     "cron:weekly": "ts-node src/scheduler/weeklyCron.ts",
-    "db:smoke": "ts-node src/db/supabaseSmokeTest.ts"
+    "db:smoke": "ts-node src/db/supabaseSmokeTest.ts",
+    "db:insert-demo": "ts-node src/db/supabaseInsertDemo.ts",
+    "db:cleanup-demo": "ts-node src/db/cleanupDemoRows.ts",
+    "system:health": "ts-node src/system/healthCheck.ts"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

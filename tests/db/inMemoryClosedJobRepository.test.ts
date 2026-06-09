@@ -12,10 +12,10 @@ function makeJob(overrides: Partial<NewClosedJob> = {}): NewClosedJob {
     raw_message: "raw message text",
     company_id: "test-company",
     whatsapp_group_id: "test-group@g.us",
-    company_name: "Sunshine Home Services",
-    customer_name: "Steve Mcgee",
-    phone: "(205) 999-9284",
-    address: "205 Fox Run Cir, Pell City, AL 35125",
+    company_name: "Example Service Company",
+    customer_name: "Demo Customer",
+    phone: "(555) 000-0000",
+    address: "123 Demo Street, Demo City, FL 00000",
     service: "Dryer vent cleaning",
     appointment: "Tuesday 02/06 @ 9am - 11am",
     technician_name: "John",
@@ -71,9 +71,9 @@ describe("save — success", () => {
       company_id: "acme-hvac",
       whatsapp_group_id: "group-123@g.us",
       company_name: "Acme HVAC",
-      customer_name: "Patricia Lane",
-      phone: "(205) 555-0182",
-      address: "310 Oak St, Birmingham, AL 35201",
+      customer_name: "Demo Customer 2",
+      phone: "(555) 000-0002",
+      address: "456 Demo Avenue, Demo City, FL 00001",
       service: "AC service",
       appointment: "Wednesday 02/07 @ 1pm - 3pm",
       technician_name: "Mike",
@@ -90,9 +90,9 @@ describe("save — success", () => {
     expect(r.company_id).toBe("acme-hvac");
     expect(r.whatsapp_group_id).toBe("group-123@g.us");
     expect(r.company_name).toBe("Acme HVAC");
-    expect(r.customer_name).toBe("Patricia Lane");
-    expect(r.phone).toBe("(205) 555-0182");
-    expect(r.address).toBe("310 Oak St, Birmingham, AL 35201");
+    expect(r.customer_name).toBe("Demo Customer 2");
+    expect(r.phone).toBe("(555) 000-0002");
+    expect(r.address).toBe("456 Demo Avenue, Demo City, FL 00001");
     expect(r.service).toBe("AC service");
     expect(r.appointment).toBe("Wednesday 02/07 @ 1pm - 3pm");
     expect(r.technician_name).toBe("Mike");
