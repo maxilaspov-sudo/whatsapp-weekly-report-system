@@ -121,6 +121,8 @@ generateFormattedWeeklyReports(repository, startDate, endDate): Promise<Formatte
 | `COMPANY_NAME` | Display name for reports |
 | `WHATSAPP_PHONE_NUMBER` | The connected WhatsApp number |
 | `REPORT_RECIPIENTS` | Who receives generated reports |
+| `MANAGER_REPORT_RECIPIENT` | Recipient for the main weekly summary (label or phone number) |
+| `DEFAULT_TECHNICIAN_RECIPIENT` | Fallback recipient for all technician reports until per-tech mapping is added |
 
 ## Completed phases
 
